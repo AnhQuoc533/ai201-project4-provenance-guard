@@ -5,18 +5,24 @@ def aggregate_confidence(signals):
     """
     Aggregate three signal scores into unified confidence score.
     
-    Placeholder: Uses weighted average formula from specification.
-    
     Args:
         signals (dict): Scores for llm_judgment, stylometry, perplexity.
     
     Returns:
         float: Unified confidence score (0.0-1.0).
     """
+    llm_score = signals['llm_judgment']['score']
+    stylometry_score = signals['stylometry']['score']
+    perplexity_score = signals['perplexity']['score']
+    
+    llm_score = 0.5 if llm_score < 0 else llm_score
+    stylometry_score = 0.5 if stylometry_score < 0 else stylometry_score
+    perplexity_score = 0.5 if perplexity_score < 0 else perplexity_score
+    
     confidence = (
-        signals['llm_judgment']['score'] * CONFIDENCE_WEIGHTS['llm_judgment'] +
-        signals['stylometry']['score'] * CONFIDENCE_WEIGHTS['stylometry'] +
-        signals['perplexity']['score'] * CONFIDENCE_WEIGHTS['perplexity']
+        llm_score * CONFIDENCE_WEIGHTS['llm_judgment'] +
+        stylometry_score * CONFIDENCE_WEIGHTS['stylometry'] +
+        perplexity_score * CONFIDENCE_WEIGHTS['perplexity']
     )
     return round(confidence, 4)
 

@@ -1,6 +1,12 @@
 import json
 from groq import Groq
-from config import GROQ_API_KEY, LLM_MODEL
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+LLM_MODEL = "openai/gpt-oss-120b"
 
 
 def _get_groq_client():
@@ -90,48 +96,3 @@ def llm_judgment(text):
             'score': -1.0,
             'reasoning': f'LLM analysis error: {str(e)}',
         }
-
-
-def stylometric_heuristics(text):
-    """
-    Evaluate text using stylometric features.
-    
-    Placeholder: Returns 0.5 with generic reasoning.
-    
-    Args:
-        text (str): Normalized text to evaluate.
-    
-    Returns:
-        dict: Score (0.0-1.0, or -1.0 for error), subscores, and reasoning.
-    """
-    return {
-        'score': 0.5,
-        'subscores': {
-            'entropy': 0.5,
-            'lexical_diversity': 0.5,
-            'sentence_variance': 0.5,
-            'rare_word_ratio': 0.5,
-            'function_word_ratio': 0.5,
-            'ngram_deviation': 0.5,
-        },
-        'reasoning': 'Stylometry placeholder - implementation pending.',
-    }
-
-
-def perplexity_calculation(text):
-    """
-    Evaluate text using perplexity measurement.
-    
-    Placeholder: Returns 0.5 with generic reasoning.
-    
-    Args:
-        text (str): Normalized text to evaluate.
-    
-    Returns:
-        dict: Score (0.0-1.0, or -1.0 for error), raw perplexity, and reasoning.
-    """
-    return {
-        'score': 0.5,
-        'raw_perplexity': 100.0,
-        'reasoning': 'Perplexity placeholder - implementation pending.',
-    }

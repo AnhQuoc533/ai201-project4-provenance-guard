@@ -1,10 +1,3 @@
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-LLM_MODEL = "openai/gpt-oss-120b"
 RATELIMIT_DEFAULT = '10 per minute'
 RATELIMIT_STORAGE_URL = 'memory://'
 MAX_CONTENT_LENGTH = 1000000

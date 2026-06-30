@@ -1,10 +1,16 @@
 from flask import Flask, request, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
+from signal_1 import llm_judgment
+from signal_2 import stylometric_heuristics
+from signal_3 import perplexity_calculation
+
 from config import RATELIMIT_DEFAULT, RATELIMIT_STORAGE_URL, MAX_CONTENT_LENGTH, LABEL_REASONING
 from normalizer import normalize_content
-from signals import llm_judgment, stylometric_heuristics, perplexity_calculation
 from confidence import aggregate_confidence, get_label
+from id_generator import generate_content_id, generate_decision_id
+from audit_logger import log_classification
 
 
 app = Flask(__name__)
@@ -93,20 +99,22 @@ def submit_text():
             'status_code': 400,
         }), 400
     
+    content_id = generate_content_id()
+    decision_id = generate_decision_id()
     normalized_text = normalize_content(data['text'])    
     signals = {
         'llm_judgment': llm_judgment(normalized_text),
         'stylometry': stylometric_heuristics(normalized_text),
         'perplexity': perplexity_calculation(normalized_text),
     }
-    # print(signals)
     confidence = aggregate_confidence(signals)
-    label = get_label(confidence)
+    label = get_label(confidence)    
+    log_classification(content_id, decision_id, data['text'], confidence, label, signals)
     
     return jsonify({
         'success': True,
         'result': {
-            'content_id': 'CTN-YYYY-MM-DD-XXXX',  # Placeholder
+            'content_id': content_id,
             'label': label,
             'confidence': confidence,
             'reasoning': LABEL_REASONING[label],
