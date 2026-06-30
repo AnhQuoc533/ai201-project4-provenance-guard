@@ -110,10 +110,10 @@ def test_response_structure():
     data = response.get_json()
     assert 'success' in data
     assert 'result' in data
-    assert 'signals' in data
+    
+    assert 'content_id' in data['result']
     assert 'label' in data['result']
     assert 'confidence' in data['result']
-    assert 'confidence_percentage' in data['result']
     assert 'reasoning' in data['result']
     assert 0.0 <= data['result']['confidence'] <= 1.0
     print('Test response structure: PASSED')

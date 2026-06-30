@@ -1,4 +1,4 @@
-from config import Config
+from config import CONFIDENCE_WEIGHTS, CONFIDENCE_THRESHOLDS
 
 
 def aggregate_confidence(signals):
@@ -13,49 +13,25 @@ def aggregate_confidence(signals):
     Returns:
         float: Unified confidence score (0.0-1.0).
     """
-    weights = Config.CONFIDENCE_WEIGHTS
     confidence = (
-        signals['llm_judgment']['score'] * weights['llm_judgment'] +
-        signals['stylometry']['score'] * weights['stylometry'] +
-        signals['perplexity']['score'] * weights['perplexity']
+        signals['llm_judgment']['score'] * CONFIDENCE_WEIGHTS['llm_judgment'] +
+        signals['stylometry']['score'] * CONFIDENCE_WEIGHTS['stylometry'] +
+        signals['perplexity']['score'] * CONFIDENCE_WEIGHTS['perplexity']
     )
     return round(confidence, 4)
 
 
-def get_label_for_confidence(confidence):
+def get_label(confidence):
     """
-    Map confidence score to transparency label.
+    Map confidence score to classification label.
     
     Args:
         confidence (float): Unified confidence score (0.0-1.0).
     
     Returns:
-        str: Transparency label text.
+        str: classification label.
     """
-    for min_score, max_score, label in Config.CONFIDENCE_THRESHOLDS:
+    for min_score, max_score, label in CONFIDENCE_THRESHOLDS:
         if min_score <= confidence <= max_score:
             return label
-    return 'Your text is AI-Generated'
-
-
-def generate_label(confidence, signals):
-    """
-    Generate transparency label with confidence score and reasoning.
-    
-    Placeholder: Returns label template with placeholder reasoning.
-    
-    Args:
-        confidence (float): Unified confidence score.
-        signals (dict): All signal results.
-    
-    Returns:
-        dict: Label text and reasoning.
-    """
-    label = get_label_for_confidence(confidence)
-    confidence_percentage = int(confidence * 100)
-    
-    return {
-        'label': label,
-        'confidence_percentage': confidence_percentage,
-        'reasoning': 'Transparency label placeholder - implementation pending.',
-    }
+    return 'Invalid Result'

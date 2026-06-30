@@ -33,12 +33,12 @@ ERROR RESPONSE          ┌─────────────────�
               ┌───────────────────┼───────────────────┐
               ▼                   ▼                   ▼
       ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-      │   Signal 1:  │   │   Signal 2:  │   │   Signal 3:  │
+      │   Signal 1   │   │   Signal 2   │   │   Signal 3   │
       │ LLM Judgment │   │  Stylometric │   │  Perplexity  │
-      │    (Groq)    │   |  Heuristics  │   │  Calculation │
+      │(gpt-oss-120b)│   |  Heuristics  │   │  Calculation │
       └──────────────┘   └──────────────┘   └──────────────┘
               │                   │                   │
-      (score + reasoning)  (score + reasoning) (score + reasoning)
+    (score + reasoning)  (score + reasoning) (score + reasoning)
               │                   │                   │
               └───────────────────┼───────────────────┘
                                   │
@@ -385,7 +385,7 @@ this content's origin?
 
 ### System Actions
 **Immediate (within seconds):**
-* Create a Content ID (format: `CTN-YYYY-MM-DD-XXXX`) after returning the Transparency Label Text to the user.
+* Create a Content ID (format: `CTN-YYYY-MM-DD-XXXX`) upon content submission.
 * Automatically fill Original Classification, Original Confidence Score, and Content ID when the form is opened
 
 **After completing the form:**

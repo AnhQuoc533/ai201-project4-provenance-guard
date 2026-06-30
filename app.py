@@ -1,19 +1,18 @@
 from flask import Flask, request, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from config import Config
+from config import RATELIMIT_DEFAULT, RATELIMIT_STORAGE_URL, MAX_CONTENT_LENGTH, LABEL_REASONING
 from normalizer import normalize_content
 from signals import llm_judgment, stylometric_heuristics, perplexity_calculation
-from confidence import aggregate_confidence, generate_label
+from confidence import aggregate_confidence, get_label
 
 
 app = Flask(__name__)
-app.config.from_object(Config)
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=app.config['RATELIMIT_DEFAULT'],
-    storage_uri='memory://',
+    default_limits=[RATELIMIT_DEFAULT],
+    storage_uri=RATELIMIT_STORAGE_URL,
 )
 
 
@@ -61,14 +60,13 @@ def validate_submission(data):
     if len(text.strip()) == 0:
         return False, 'Field text cannot be empty.'
     
-    if len(text) > 1000000:
-        return False, 'Text exceeds maximum length of 1,000,000 characters.'
+    if len(text) > MAX_CONTENT_LENGTH:
+        return False, f'Text exceeds maximum length of {MAX_CONTENT_LENGTH:,} characters.'
     
     return True, None
 
 
 @app.route('/submit', methods=['POST'])
-@limiter.limit()
 def submit_text():
     """
     Submit text for AI detection analysis.
@@ -95,39 +93,23 @@ def submit_text():
             'status_code': 400,
         }), 400
     
-    raw_text = data['text']
-    normalized_text = normalize_content(raw_text)
-    
+    normalized_text = normalize_content(data['text'])    
     signals = {
         'llm_judgment': llm_judgment(normalized_text),
         'stylometry': stylometric_heuristics(normalized_text),
         'perplexity': perplexity_calculation(normalized_text),
     }
-    
+    # print(signals)
     confidence = aggregate_confidence(signals)
-    label_output = generate_label(confidence, signals)
+    label = get_label(confidence)
     
     return jsonify({
         'success': True,
         'result': {
-            'label': label_output['label'],
+            'content_id': 'CTN-YYYY-MM-DD-XXXX',  # Placeholder
+            'label': label,
             'confidence': confidence,
-            'confidence_percentage': label_output['confidence_percentage'],
-            'reasoning': label_output['reasoning'],
-        },
-        'signals': {
-            'llm_judgment': {
-                'score': signals['llm_judgment']['score'],
-                'reasoning': signals['llm_judgment']['reasoning'],
-            },
-            'stylometry': {
-                'score': signals['stylometry']['score'],
-                'reasoning': signals['stylometry']['reasoning'],
-            },
-            'perplexity': {
-                'score': signals['perplexity']['score'],
-                'reasoning': signals['perplexity']['reasoning'],
-            },
+            'reasoning': LABEL_REASONING[label],
         },
         'status_code': 200,
     }), 200
@@ -145,4 +127,4 @@ def home():
 
 
 if __name__ == '__main__':
-    app.run(debug=app.config['DEBUG'], port=5000)
+    app.run(debug=True, port=5000)
