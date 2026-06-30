@@ -1,0 +1,148 @@
+from flask import Flask, request, jsonify
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from config import Config
+from normalizer import normalize_content
+from signals import llm_judgment, stylometric_heuristics, perplexity_calculation
+from confidence import aggregate_confidence, generate_label
+
+
+app = Flask(__name__)
+app.config.from_object(Config)
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=app.config['RATELIMIT_DEFAULT'],
+    storage_uri='memory://',
+)
+
+
+@app.errorhandler(400)
+def handle_bad_request(e):
+    """Handle bad request errors."""
+    return jsonify({
+        'error': 'Bad request',
+        'message': str(e.description),
+        'status_code': 400,
+    }), 400
+
+
+@app.errorhandler(429)
+def handle_rate_limit(e):
+    """Handle rate limit exceeded errors."""
+    return jsonify({
+        'error': 'Rate limit exceeded',
+        'message': 'Maximum 10 requests per minute allowed. Please try again later.',
+        'status_code': 429,
+    }), 429
+
+
+def validate_submission(data):
+    """
+    Validate submission request data.
+    
+    Args:
+        data (dict): Request JSON data.
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not isinstance(data, dict):
+        return False, 'Request body must be valid JSON.'
+    
+    if 'text' not in data:
+        return False, 'Missing required field: text'
+    
+    text = data.get('text', '')
+    
+    if not isinstance(text, str):
+        return False, 'Field text must be a string.'
+    
+    if len(text.strip()) == 0:
+        return False, 'Field text cannot be empty.'
+    
+    if len(text) > 1000000:
+        return False, 'Text exceeds maximum length of 1,000,000 characters.'
+    
+    return True, None
+
+
+@app.route('/submit', methods=['POST'])
+@limiter.limit()
+def submit_text():
+    """
+    Submit text for AI detection analysis.
+    
+    Request body: {text: string}
+    
+    Returns:
+        JSON response with confidence score and transparency label.
+    """
+    try:
+        data = request.get_json(force=True, silent=True)
+    except Exception:
+        return jsonify({
+            'error': 'Invalid JSON',
+            'message': 'Request body must be valid JSON.',
+            'status_code': 400,
+        }), 400
+    
+    is_valid, error_message = validate_submission(data)
+    if not is_valid:
+        return jsonify({
+            'error': 'Validation error',
+            'message': error_message,
+            'status_code': 400,
+        }), 400
+    
+    raw_text = data['text']
+    normalized_text = normalize_content(raw_text)
+    
+    signals = {
+        'llm_judgment': llm_judgment(normalized_text),
+        'stylometry': stylometric_heuristics(normalized_text),
+        'perplexity': perplexity_calculation(normalized_text),
+    }
+    
+    confidence = aggregate_confidence(signals)
+    label_output = generate_label(confidence, signals)
+    
+    return jsonify({
+        'success': True,
+        'result': {
+            'label': label_output['label'],
+            'confidence': confidence,
+            'confidence_percentage': label_output['confidence_percentage'],
+            'reasoning': label_output['reasoning'],
+        },
+        'signals': {
+            'llm_judgment': {
+                'score': signals['llm_judgment']['score'],
+                'reasoning': signals['llm_judgment']['reasoning'],
+            },
+            'stylometry': {
+                'score': signals['stylometry']['score'],
+                'reasoning': signals['stylometry']['reasoning'],
+            },
+            'perplexity': {
+                'score': signals['perplexity']['score'],
+                'reasoning': signals['perplexity']['reasoning'],
+            },
+        },
+        'status_code': 200,
+    }), 200
+
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint."""
+    return jsonify({'status': 'healthy'}), 200
+
+
+@app.route("/")
+def home():
+    return "Provenance Guard is running."
+
+
+if __name__ == '__main__':
+    app.run(debug=app.config['DEBUG'], port=5000)
