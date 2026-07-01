@@ -54,7 +54,7 @@ def stylometric_heuristics(text):
         )
         
         return {
-            'score': round(avg_score, 4),
+            'score': avg_score,
             'subscores': subscores,
             'reasoning': reasoning,
         }

@@ -35,7 +35,7 @@ ERROR RESPONSE          ┌─────────────────�
       ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
       │   Signal 1   │   │   Signal 2   │   │   Signal 3   │
       │ LLM Judgment │   │  Stylometric │   │  Perplexity  │
-      │(gpt-oss-120b)│   |  Heuristics  │   │  Calculation │
+      │    (Groq)    │   |  Heuristics  │   │  Calculation │
       └──────────────┘   └──────────────┘   └──────────────┘
               │                   │                   │
     (score + reasoning)  (score + reasoning) (score + reasoning)
@@ -405,17 +405,17 @@ this content's origin?
 {
   "appeal_id": "APP-YYYY-MM-DD-XXXX",
   "content_id": "CTN-YYYY-MM-DD-XXXX",
-  "original_decision_id": "DEC-YYYY-MM-DD-XXXX",
   "creator_email": "creator@example.com",
   "created_at": "YYYY-MM-DDTHH:mm:ssZ",
+  "content": "<original submitted text>",
   
-  "original_classification": {
+  "classification": {
     "result": "<transparency label>",
     "confidence": <confidence score>,
     "signals": {
-      "llm_groq": {"score": <signal1 score>, "reasoning": "<Original LLM reasoning>"},
-      "stylometry": {"score": <signal2 score>, "reasoning": "Entropy score: <score value>, Lexical diversity: <score value>, ..."},
-      "perplexity": {"score": <signal3 score>, "reasoning": "Normalized perplexity <score value> (raw: <raw value>)"}
+      "llm_groq": {"score": <signal 1 score>, "reasoning": "<Original LLM reasoning>"},
+      "stylometry": {"score": <signal 2 score>, "reasoning": "Entropy score: <score value>, Lexical diversity: <score value>, ..."},
+      "perplexity": {"score": <signal 3 score>, "reasoning": "Normalized perplexity <score value> (raw: <raw value>)"}
     }
   },
   
@@ -543,6 +543,7 @@ If Reviewer selects "Approve Appeal" or "Deny Appeal":
 - Audit log updated with reviewer decision, reasoning, and `label_decision`
 - Case `status` changes to `resolved`
 - Creator receives decision notification via email
+- Add `decision_id` (format: `DEC-YYYY-MM-DD-XXXX`) to the logging data of the content
 
 If Reviewer selects "Inconclusive":
 - Reviewer requests additional information from creator

@@ -31,8 +31,8 @@ def perplexity_calculation(text):
         reasoning = f'Normalized perplexity {normalized_score:.2f} (raw: {raw_perplexity:.1f})'
         
         return {
-            'score': round(normalized_score, 4),
-            'raw_perplexity': round(raw_perplexity, 2),
+            'score': normalized_score,
+            'raw_perplexity': raw_perplexity,
             'reasoning': reasoning,
         }
     except Exception as e:

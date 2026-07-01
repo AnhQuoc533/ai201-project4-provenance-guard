@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-LLM_MODEL = "openai/gpt-oss-120b"
+LLM_MODEL = "llama-3.3-70b-versatile"
 
 
 def _get_groq_client():
@@ -75,7 +75,7 @@ def llm_judgment(text):
         if parsed and isinstance(parsed, dict) and 'score' in parsed:
             score = float(parsed['score'])
             score = max(0.0, min(1.0, score))
-            reasoning = str(parsed.get('reasoning', 'Analysis complete'))
+            reasoning = str(parsed.get('reasoning', 'Analysis complete.'))
             return {
                 'score': score,
                 'reasoning': reasoning,

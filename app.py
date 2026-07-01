@@ -9,7 +9,6 @@ from signal_3 import perplexity_calculation
 from config import RATELIMIT_DEFAULT, RATELIMIT_STORAGE_URL, MAX_CONTENT_LENGTH, LABEL_REASONING
 from normalizer import normalize_content
 from confidence import aggregate_confidence, get_label
-from id_generator import generate_content_id, generate_decision_id
 from audit_logger import log_classification
 
 
@@ -99,8 +98,6 @@ def submit_text():
             'status_code': 400,
         }), 400
     
-    content_id = generate_content_id()
-    decision_id = generate_decision_id()
     normalized_text = normalize_content(data['text'])    
     signals = {
         'llm_judgment': llm_judgment(normalized_text),
@@ -109,7 +106,7 @@ def submit_text():
     }
     confidence = aggregate_confidence(signals)
     label = get_label(confidence)    
-    log_classification(content_id, decision_id, data['text'], confidence, label, signals)
+    content_id = log_classification(data['text'], confidence, label, signals)
     
     return jsonify({
         'success': True,

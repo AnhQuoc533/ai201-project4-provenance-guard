@@ -25,6 +25,6 @@ Introducing **Provenance Guard**: a backend system that any creative sharing pla
 
 
 **Instance 2:**
-* *What I gave the AI:* 
+* *What I gave the AI:* The context of my project, its architecture, its source code files, detection signal description
 * *What it produced:* 
 * *What I changed or overrode:* 
