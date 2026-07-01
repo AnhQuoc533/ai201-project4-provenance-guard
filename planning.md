@@ -597,7 +597,7 @@ Non-native speakers are penalized by a system trained on diverse native-speaker 
 **What I'll give it as input:**
 - Detection Signals > Stylometric Heuristics (full section)
 - Detection Signals > Perplexity Calculation (full section)
-- Uncertainty Representation > Aggregation Formula (weights: 0.4, 0.35, 0.25)
+- Uncertainty Representation > Aggregation Formula
 - Uncertainty Representation > Threshold Mapping (full table)
 
 **What I expect it to produce:**

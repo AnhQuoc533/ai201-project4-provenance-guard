@@ -348,25 +348,52 @@ identified AI-generation patterns:
 - Predictable sequences matching AI baseline patterns
 - No indicators of human-written variation or originality
 
+## Rate limiting
+**Limit:** 10 requests per minute per IP.
+
+**Reason:** Groq's free tier typically allows 10-30 requests per minute (varies by region/time). My rate limit is 10 req/min, which is at the lower end of that spectrum. Additionally, this limit is overly generous for legitimate users. An active user could theoretically made up to 3 requests per minute for brief periods (checking multiple drafts).
+
+## Edge Cases
+### Edge Case 1 
+**Scenario:** The submitted text is a formally structured machine learning paper excerpt, written by a non-native speaker. The writing is grammatically perfect, uses precise technical vocabulary, has low sentence length variance (consistent paragraph structure), and low rare word frequency (because technical terms are repeated).  
+
+**Why the system will fail:** ESL speakers learning academic English often adopt formal, structured styles as a deliberate strategy for clarity
+academic writing in any language emphasizes consistency and precision
+The system conflates "formal and consistent" with "AI-generated"
+Non-native speakers are penalized by a system trained on diverse native-speaker data  
+
+**What wil happen:** False positive with high confidence. The appeal mechanism is critical here. The creator provides evidence: "This is my advisor-reviewed draft," "My first language is Mandarin," "This is required by department style guide." A human reviewer can then recognize the legitimate explanation and override the algorithmic decision.  
+
+### Edge Case 2
+**Scenario:** The submitted text is a poem using deliberate repetition for effect. The poem uses simple vocabulary and short sentences. Lines like "I walk, I walk, I walk / The path, the path, the path" create a low perplexity score, while the stylometry signal classifies it as "AI-generated." However, the LLM signal correctly identifies the poem as human-written because its internal representations recognize poetic intent. As a result, the combined confidence yeilds an uncertain score.
+
+**Why the system will fail:** Poetry deliberately defies stylometric norms for effect with repetition, low vocabulary diversity, and rhythm. On the other hand, the system is calibrated on prose, not verse. Perplexity signal will treat "simple vocabulary" as "AI-generated" without distinguishing intentional poetic simplicity
+
+**What will happen:** Uncertain label will occur. The creator appeals, explaining: "This is intentional poetic repetition. My style uses minimalist vocabulary for emotional impact." Human review reveals the poem uses established poetic techniques (anaphora, isocolon). The appeal is approved.
+
 ## Spec Reflection
 
 **One way the spec helped you during implementation:**  
+The provided theoretical grounding in the spec helped me identify the corrupted implementation logic in signal 2 and 3. Specifically, during testing phase, I saw that the perplexity function and the stylometric heuristics function gave a very high score for a clearly human text. When I cross-referenced the spec's definition, I found a mismatch. This mismatch immediately surfaced the double-inversion error that would have been invisible otherwise.
 
-
-**One way your implementation diverged from the spec, and why:**  
-
+**One way your implementation diverged from the spec, and why:**   
+I added an extra label (`Invalid Result`), along with its transparency text for the purpose of error handling. To support this, I let the signals to return a score of `-100.0` and include the exception message inside the `reasoning` field whenever an error occurs. This will help human reviewers to easily identify the root of cause from the audit log, instead of spending time reproducing the bugs.
 
 ---
 
 ## AI Usage
 **Instance 1:**
 * *What I gave the AI:* The context of my project, its architecture, detection signal description, uncertainty representation, and ask the AI to design an appeal system that can answer these questions:  
-    >Who can submit an appeal? What information do they provide? What does the system do when an appeal is received. What status changes, what gets logged? What would a human reviewer see when they open the appeal queue?
+    > Who can submit an appeal? What information do they provide? What does the system do when an appeal is received. What status changes, what gets logged? What would a human reviewer see when they open the appeal queue?
 * *What it produced:* An appeal system design written in Markdown, including Who Can Appeal, Appeal Submission Form, System Actions, Audit Log Capture, Human Reviewer View
 * *What I changed or overrode:* Since my system does not support account service, I had to remove some fields and make a few changes in every section of the design. For example, the appeal form must require appellant's email and will be sent to there after submission. Moreover, Content ID, Original Classification and Original Confidence Score must be auto-filled by the system and can't be modified. The system will auto-create a Content ID and will write it down on the form. Finally, I made several format changes to improve claritification and readability.
 
 
 **Instance 2:**
-* *What I gave the AI:* The context of my project, its architecture, its source code files, detection signal description
-* *What it produced:* 
-* *What I changed or overrode:* 
+* *What I gave the AI:* The context of my project, its architecture, its source code files, detection signal description, aggregation formula, threshold mpping table, and ask it to implement three dectection signals and confidence aggregation function.
+* *What it produced:*   
+  Stylometric heuristics function returning `{score: 0.0-1.0, subscores: {entropy, lexical_diversity, sentence_variance, rare_word_ratio, function_word_ratio, ngram_deviation}, reasoning: string}`.  
+  Perplexity calculation function returning `{score: 0.0-1.0, raw_perplexity: float, reasoning: string}`  
+  Confidence scoring function that aggregates three signals using weighted formula  
+  Updated `/submit` endpoint that calls all three signals and returns `{confidence: float, signals: {llm, stylometry, perplexity}}`
+* *What I changed or overrode:* The perplexity function manually implemented cross-entropy based on word frequency. However, I want this signal to employ true language-model perplexity from a pretrained language model. Therefore, I refactored this particular signal entirely, using the standard GPT-2 language model from the Hugging Face transformers library.
