@@ -4,7 +4,6 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 LLM_MODEL = "llama-3.3-70b-versatile"
 
@@ -36,11 +35,11 @@ def llm_judgment(text):
         text (str): Normalized text to evaluate.
     
     Returns:
-        dict: Score (0.0-1.0, or -1.0 for error) and reasoning.
+        dict: Score (0.0-1.0, or -100.0 for error) and reasoning.
     """
     if not text or not isinstance(text, str):
         return {
-            'score': -1.0,
+            'score': -100.0,
             'reasoning': 'Invalid input text for analysis',
         }
     
@@ -59,7 +58,7 @@ def llm_judgment(text):
             f"Text to analyze:\n{text}\n\n"
             "Respond with JSON only: "
             "{\"score\": <number 0.0 to 1.0>, \"reasoning\": \"<explanation>\"}\n"
-            "Where: 0.0 = very likely human-written, 1.0 = very likely AI-generated"
+            "Where: 0.0 = human-written, 1.0 = AI-generated"
         )
         
         response = client.chat.completions.create(
@@ -82,17 +81,17 @@ def llm_judgment(text):
             }
         
         return {
-            'score': -1.0,
+            'score': -100.0,
             'reasoning': 'Could not parse LLM response format',
         }
         
     except ValueError as e:
         return {
-            'score': -1.0,
+            'score': -100.0,
             'reasoning': f'Configuration error: {str(e)}',
         }
     except Exception as e:
         return {
-            'score': -1.0,
+            'score': -100.0,
             'reasoning': f'LLM analysis error: {str(e)}',
         }

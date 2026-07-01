@@ -4,7 +4,349 @@ Platforms where people share original creative work — writing, music, art — 
 
 Introducing **Provenance Guard**: a backend system that any creative sharing platform could plug into to classify submitted content. This system will score confidence in that classification, surface a transparency label to user, and handle appeals from creators who believe their contents have been misclassified.
 
+
+## Architecture
+### Text Submission Workflow
+When a creator submits text, it flows through a rate limiter and content normalizer, then enters a detection engine that evaluates the content using three independent signals: LLM judgment (semantic patterns), stylometric heuristics (linguistic statistics), and perplexity calculation (predictability). All of which are weighted and aggregated into a unified confidence score (0.0-1.0) that maps to a transparency label. This label will be then accompanied by plain-language reasoning, returned to the client, and logged for audit purposes.
+```
+           CREATOR SUBMITS TEXT
+                    │
+                    ▼
+           ┌──────────────────┐
+           │   API Endpoint   │
+           │     (Flask)      │
+           └──────────────────┘
+                    │
+                    ▼
+           ┌──────────────────┐
+           │   Rate Limiter   │
+           │  (Flask-Limiter) │
+           └──────────────────┘
+      exceeded      │
+      ┌─────────────┴─────────────┐
+      │                           │
+      ▼                           ▼
+ERROR RESPONSE          ┌──────────────────┐
+                        │Content Normalizer│
+                        │(standardize text)│
+                        └──────────────────┘
+                                  │
+                                  ▼
+                        ┌──────────────────┐
+                        │ Detection Engine │
+                        └──────────────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              ▼                   ▼                   ▼
+      ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+      │   Signal 1   │   │   Signal 2   │   │   Signal 3   │
+      │ LLM Judgment │   │  Stylometric │   │  Perplexity  │
+      │    (Groq)    │   |  Heuristics  │   │  Calculation │
+      └──────────────┘   └──────────────┘   └──────────────┘
+              │                   │                   │
+    (score + reasoning)  (score + reasoning) (score + reasoning)
+              │                   │                   │
+              └───────────────────┼───────────────────┘
+                                  │
+                                  ▼
+                       ┌────────────────────┐
+                       │ Confidence Scoring │
+                       │ (aggregate signals)│
+                       └────────────────────┘
+                                  │
+                                  ▼
+                    ┌──────────────────────────┐
+                    │ Unified Confidence Score │
+                    │       (0.0 - 1.0)        │
+                    └──────────────────────────┘
+                                  │
+                                  ▼
+                        ┌──────────────────┐
+                        │ Label Generator  │
+                        │(create user text)│
+                        └──────────────────┘
+                                  │
+                                  ▼
+                    ┌───────────────────────────┐
+                    │  Transparency Label Text  │
+                    │  (plain language output)  │
+                    └───────────────────────────┘
+                                  │
+        ┌─────────────────────────┴──────────────────────┐
+        ▼                                                ▼
+┌──────────────────┐                            ┌──────────────────┐
+│   API Response   │                            │   Audit Logger   │
+│- Result          │                            │- Decision log    │
+│- Confidence      │                            │- Signals used    │
+│- Label Text      │                            │- Confidence      │
+└──────────────────┘                            │- Timestamp       │
+        │                                       │- User info       │
+        │ return to client                      │- Content ID      │
+        ▼                                       └──────────────────┘
+┌─────────────────┐
+│READER SEES LABEL│
+└─────────────────┘
+```
 ---
+
+### Appeal Workflow
+If a creator contests the classification, they submit a detailed appeal form providing their writing context and proof. The form includes process duration, methodology, AI tool usage, and optional supporting evidence (drafts, timestamps, chat logs), which triggers a status change to "under review," creates an appeal record with a unique identifier, and routes the case to a human reviewer. The reviewer will assess the original signals against the creator's evidence to make a final decision (approve, deny, or request more information).
+```
+                  CREATOR CONTESTS CLASSIFICATION
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │    Appeal Handler     │
+                    │- Capture reasoning    │
+                    │- Validate appeal      │
+                    └───────────────────────┘
+            ┌───────────────────┴─────────────────┐
+            ▼                                     ▼
+┌───────────────────────┐            ┌────────────────────────┐
+│      Audit Logger     │            │        Notifier        │
+│- Content ID           │            │  Email copy of appeal  │
+│- Creator appeal info  │            │    form to creator     │
+│- Decision ID          │            └────────────────────────┘
+└───────────────────────┘                
+            │
+            ▼
+┌───────────────────────┐
+│ Content Status Update │
+│ Set to "Under Review" │
+└───────────────────────┘
+            │
+            ▼                    ┌───────────────────┐            
+ QUEUED FOR HUMAN REVIEW ──────> │  Reviewer opens   │
+                                 │ appeals dashboard │
+                                 └───────────────────┘
+                                            │
+                                            ▼
+                                ┌──────────────────────┐
+                                │Views queue of pending│
+                                │  and assigned cases  │
+                                └──────────────────────┘
+                                            │
+                                            ▼
+                                  ┌───────────────────┐
+                                  │ Selects and opens │
+                                  │ a case for review │
+                                  └───────────────────┘
+                                            │
+                                            ▼
+                              ┌──────────────────────────┐
+                              │Examines and make decision│
+                              └──────────────────────────┘
+                                    ┌───────┴───────┐
+                                    ▼               ▼
+                            ┌──────────────┐ ┌──────────────┐
+                            │ Approve/Deny │ │ Inconclusive │
+                            └──────────────┘ └──────────────┘
+                                    │                │
+                                    ▼                ▼
+                         ┌──────────────────┐ ┌─────────────────┐
+                         │ Content resolved │ │ Email questions │
+                         │ Email to creator │ │   to creator    │
+                         └──────────────────┘ └─────────────────┘
+                                   │                   │
+                                   ▼                   ▼
+                            ┌────────────┐    ┌─────────────────┐
+                            │ Close case │    │Awaiting response│
+                            └────────────┘    └─────────────────┘
+```
+
+## Detection Signals
+
+### LLM Judgement
+**Property Measured:** Semantic coherence, reasoning patterns, contextual consistency, narrative flow, logical argumentation structure, and stylistic markers that the model has learned to associate with human vs. AI-generated text during training.  
+
+**Output format:** Continuous score from 0.0 to 1.0, where 0.0 indicates "very likely human-written" and 1.0 indicates "very likely AI-generated." Also returns structured reasoning explaining the classification.
+  
+**Why It Differs Between Human and AI:**
+* AI models generate text by predicting the most probable next token based on training data patterns. This produces text that is statistically "smooth" and coherent but often lacks the unpredictable tangents, contradictions, emotional authenticity, and genuine curiosity that human writers display.
+* Humans write with intent (persuasion, expression, story), which creates distinctive argument structures, voice, and occasionally deliberate rule-breaking for effect. AI aims for statistical likelihood, not intent.
+* The LLM has learned patterns of what AI-generated text "looks like" during training (repetitive phrases, hedging language, list-heavy formatting, generic transitions).
+
+**Blind Spots:**
+* Humanization: If AI text is deliberately altered to mimic human writing (prompt-engineered, rewritten, or trained to avoid detection markers), the LLM may fail. It cannot find the deception that targets its own training patterns.
+* Specialized writing: In highly technical or specialized topics where the LLM has little training data, it cannot distinguish human from AI writing because both appear equally unfamiliar and high-quality.
+* Potential Bias: Any LLM has biases in its training data. Therefore, they may incorrectly flag formal, well structured human writing as AI-generated.
+* Future Advancement: As AI models improve and training data shifts, the markers the LLM learned become outdated. A text generated by a future model may not match any "AI signature" the current model recognizes.
+* No Confidence in Uncertainty: The LLM returns a confidence score, but that score reflects model uncertainty, not ground truth. A 0.6 confidence doesn't mean the text is ambiguous; it means the model is uncertain about what it learned.
+
+### Stylometric Heuristics
+**Property Measured:** Statistical distributions of linguistic features, including word frequency entropy, vocabulary richness (type-token ratio), sentence length uniformity, rare word avoidance, function word patterns, n-gram consistency, and readability metrics.
+
+**Output format:** Six independent subscores (each 0.0 to 1.0), aggregated into a single 0.0 to 1.0 stylometry score using mean function.
+* Entropy score: normalized Shannon entropy (lower entropy = higher AI likelihood)
+* Lexical diversity: (1 - TTR) normalized (lower diversity = higher AI likelihood)
+* Sentence variance: inverse of coefficient of variation (lower variance = higher AI likelihood)
+* Rare word ratio: (observed rare words / expected rare words) normalized
+* Function word ratio: deviation from reference baseline
+* N-gram deviation: chi-squared test against reference corpus
+
+**Why It Differs Between Human and AI:**
+* Human writers unconsciously vary their linguistic choices. They use rare words unpredictably, vary sentence length naturally, and have idiosyncratic function word preferences shaped by regional dialect, education, and personality.
+* AI models generate text by sampling from probability distributions. Even with randomization, the underlying distributions are learned from training data and tend toward the statistical "center". This results in more predictable word sequences, more uniform sentence lengths, and fewer rare word choices (because rare words have lower training frequency).
+* Humans occasionally make grammar mistakes, use colloquialisms, and use deliberate stylistic breaks. AI avoids these because they are low-probability in training data.
+
+**Blind Spots:**
+* Formal writing: academic papers, technical documentation, business prose naturally exhibit low entropy, high consistency, and avoidance of rare words. These texts can be classified as AI-generated despite being human-written. Stylometry conflates formal writing with AI writing.
+* Genre Insensitivity: Poetry, listicles, and instruction manuals inherently have different stylometric signatures. A heuristic trained on prose may incorrectly classify other genres.
+Corpus Dependency: Rare word detection requires a reference corpus. If the reference corpus is outdated or mismatched to the text's domain, rare word thresholds become meaningless. A word that's "rare" in Wikipedia may be "common" in medical literature.
+* No Semantic Understanding: Stylometric heuristics measure form, not meaning. They cannot detect if the ideas are original or reused. A human could paste another human's text, and stylometry would have no signal.
+* Noise in Short texts: Small paragraphs (< 200 words) produce unreliable entropy and variance statistics. The signal becomes too noisy to be meaningful.
+* Humanization: If AI text is run through a post-processing step that adds rare words, varies sentence length artificially, or injects deliberate grammar errors, stylometry becomes useless.
+
+### Perplexity Calculation
+**Property Measured:** The predictability of a piece of text, calculated as the exponential of the average negative log-likelihood of the text across all tokens. Lower perplexity means the text more predictable and AI-like, higher perplexity means more surprising, complex, and human-like.
+
+**Output format:** Raw perplexity value (typically 20-300 for natural text), normalized to 0.0 to 1.0 scale using min-max normalization. 0.0 indicates "very high perplexity (human-written)" and 1.0 indicates "very low perplexity (AI-generated)."
+
+**Why It Differs Between Human and AI:**
+AI text generated by a model will have low perplexity because the reference model learned similar patterns. The text aligns with the reference model's learned distribution. On the other hand, human writing usually contains novel phrasings, unexpected word choices, and reasoning jumps that a general reference model finds perplexing. This produces higher perplexity.
+
+**Blind Spots:**
+* Model-Specific Measurement: Perplexity is relative to the specific reference model. The same text can have low perplexity under GPT-2 and high perplexity under a domain-specific medical model. There is no absolute perplexity threshold.
+* Human-Like AI: If AI text is generated by a model trained on diverse, high-quality human text, it will have perplexity indistinguishable from actual human writing. Perplexity cannot differentiate between "human-like AI" and "human writing."
+* Incoherent Writing: A human writing with low coherence may produce high-perplexity text that looks AI-generated by this metric.
+* Domain Mismatch: If the reference model's training data doesn't cover the text's domain, both human and AI text will appear high-perplexity. The signal becomes unreliable.
+* No Intent Detection: Perplexity measures predictability, not authenticity or intent. A human could memorize someone else's text and recite it verbatim, producing low perplexity while still being human-written.
+* Language Trend: As language evolves and new vocabulary invented, a static reference model becomes outdated. Texts using contemporary slang or new concepts will inflate perplexity.
+* Threshold Ambiguity: The perplexity threshold between human-like and AI-like texts This requires empirical calibration. Plus, the threshold may not generalize across domains, languages, or the status quo.
+
+## Uncertainty Representation
+**Aggregation Formula:**  
+`final_confidence = (signal1 * 0.4) + (signal2 * 0.25) + (signal3 * 0.35)`  
+This function aggregates three signal scores with different weights. LLM judgment is most reliable (40%), perplexity is the primary quantitative signal (35%) as it directly measures text predictability using a pretrained language model, and stylometry is calibrated lower (25%) because heuristic-based metrics are sensitive to formal writing styles, genres, and domain-specific conventions.
+
+**Threshold Mapping:**
+| Confidence Range | Classification |
+| :--- | :--- |
+| 0.00 - 0.15 | Your text is Human written |
+| 0.15 - 0.30 | Most of Your text is Human Written |
+| 0.30 - 0.42 | Your text is Most Likely Human written, may include parts generated by AI |
+| 0.42 - 0.50 | Your text is Likely Human written, may include parts generated by AI |
+| 0.50 - 0.70 | Your text contains mixed signals, with some parts generated by AI |
+| 0.70 - 0.80 | Your text is Likely AI-generated |
+| 0.80 - 0.90 | Your text is Most Likely AI-generated |
+| 0.90 - 0.97 | Most of Your text is AI-Generated |
+| 0.97 - 1.00 | Your text is AI-Generated |
+
+**Example 1:**
+> Artificial intelligence is a rapidly evolving field that has the potential to transform many industries. Machine learning algorithms can process large amounts of data and identify patterns. Natural language processing enables computers to understand human language. Computer vision allows machines to analyze images and videos. Deep learning models have demonstrated impressive results in various applications. These technologies offer numerous benefits and opportunities for businesses. However, there are also important considerations and challenges to address. Organizations should carefully evaluate their needs and resources. Implementing AI solutions requires careful planning and execution. The future of artificial intelligence depends on continued research and development.
+
+Confidence Score: `0.8231`
+
+**Example 2:**
+> Hi guys, I'm looking for advice specifically from MIS majors/alumni and how to prepare/study for internships and/or jobs. I am currently a junior and so far have only started taking MIS 310, 320, and 350 and I know that I enjoy SQL and other coding languages like Python, but I don't really know what else to do as even some professors have just told me to "keep studying the material we give out". What I'm really looking for are examples of what you have done to land jobs and what I could do outside of school that may also help me. I also want to get a master's in Business Analytics in the future. Thanks in advance!
+
+Confidence Score:`0.2943`
+
+## Transparency Label Design
+### Template
+```
+ATTRIBUTION ANALYSIS
+
+<Transparency Label>
+Confidence: <Confidence Score (0-100)>%
+
+<Typed description of score reasoning>
+
+*If you believe our analysis is wrong, you can submit an appeal with details about your writing process and any AI tools you used.*
+```
+### Label 1: 0.00 - 0.15
+**Transparency Label:** Your text is Human written
+
+**Score Reasoning:**  
+Our analysis found natural variation in word choice, sentence structure, and phrasing patterns typical of human writing. The 
+text shows unexpected conceptual jumps and stylistic choices 
+consistent with authentic human expression.
+
+### Label 2: 0.15 - 0.30
+**Transparency Label:** Most of Your text is Human Written
+
+**Score Reasoning:**  
+Our analysis detected predominantly human writing patterns. The text shows natural variation in word choice and sentence structure. There may be small sections that exhibit AI-like characteristics, 
+but the overall content appears human-written.
+
+### Label 3: 0.30 - 0.42 
+**Transparency Label:** Your text is Most Likely Human written, may include parts generated by AI
+
+**Score Reasoning:**  
+Our analysis suggests this is primarily human-authored work. However, we detected some sections with patterns more typical of 
+AI-generated text. This could mean:
+- You used AI tools to help with specific sections
+- Some paragraphs were rewritten multiple times
+- The text includes quoted or referenced material
+
+### Label 4: 0.42 - 0.50
+**Transparency Label:** Your text is Likely Human written, may include parts generated by AI
+
+**Score Reasoning:**  
+Our analysis produced mixed signals. Some patterns suggest human 
+authorship, while others align with AI-generated text. This is 
+common when:
+- You revised and rewrote sections multiple times
+- The text spans different topics or writing styles
+- You used AI tools for research or brainstorming
+
+### Label 5: 0.50 - 0.70
+**Transparency Label:** Your text contains mixed signals, with some parts generated by AI
+
+**Score Reasoning:**  
+Our analysis produced conflicting signals:
+- Some patterns suggest human writing
+- Other patterns align with AI-generated text
+- The overall style makes classification difficult
+
+This could indicate:
+- A mix of human and AI-generated content
+- Formal or technical writing that resembles AI patterns
+- Content in a style or genre we classify less reliably
+
+### Label 6: 0.70 - 0.80
+**Transparency Label:** Your text is Likely AI-generated
+
+**Score Reasoning:**  
+We detected patterns consistent with AI-generated text, including:
+- Formal structure and consistent phrasing typical of language models
+- Low variation in sentence length and word choice
+- Technical terminology arranged in predictable sequences
+- Statistical patterns matching AI baseline
+
+### Label 7: 0.80 - 0.90
+**Transparency Label:** Your text is Most Likely AI-generated
+
+**Score Reasoning:**  
+Our analysis detected strong patterns across multiple detection 
+methods that are characteristic of AI-generated text:
+- Consistent formal structure throughout
+- Limited variation in sentence length and phrasing
+- Predictable word sequences and terminology placement
+- Uniformity in writing style and tone
+
+### Label 8: 0.90 - 0.97
+**Transparency Label:** Most of Your text is AI-Generated
+
+**Score Reasoning:**  
+Our analysis detected strong and consistent patterns indicating 
+AI generation across nearly all of the content. We found:
+- Pervasive formal structure and consistent phrasing
+- Minimal variation in writing style
+- Predictable vocabulary and sentence patterns throughout
+- Multiple indicators aligned on AI-generated classification
+
+### Label 9: 0.97 - 1.00
+**Transparency Label:** Your text is AI-Generated
+
+**Score Reasoning:**  
+Our analysis detected overwhelming evidence that this content was 
+generated by an AI. All of our detection methods consistently 
+identified AI-generation patterns:
+- Pervasive consistent structure typical of language models
+- Uniformity in word choice and phrasing throughout
+- Predictable sequences matching AI baseline patterns
+- No indicators of human-written variation or originality
 
 ## Spec Reflection
 

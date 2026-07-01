@@ -1,10 +1,8 @@
 import json
 import os
 import uuid
+from config import AUDIT_LOG_PATH
 from datetime import datetime, timezone
-
-
-AUDIT_LOG_PATH = 'audit_log.json'
 
 
 def _get_iso_timestamp():

@@ -100,7 +100,7 @@ def submit_text():
         JSON response with confidence score and transparency label.
     """
     try:
-        data = request.get_json(force=True, silent=True)
+        data = request.get_json()
     except Exception:
         return jsonify({
             'error': 'Invalid JSON',

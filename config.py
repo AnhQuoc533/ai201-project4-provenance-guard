@@ -1,9 +1,10 @@
 RATELIMIT_DEFAULT = '10 per minute'
 RATELIMIT_STORAGE_URL = 'memory://'
 MAX_CONTENT_LENGTH = 1000000
+AUDIT_LOG_PATH = 'audit_log.json'
 CONFIDENCE_WEIGHTS = {'llm_judgment': 0.4,
-                      'stylometry': 0.35,
-                      'perplexity': 0.25}
+                      'stylometry': 0.25,
+                      'perplexity': 0.35}
 
 CONFIDENCE_THRESHOLDS = [
     (0.00, 0.15, 'Your text is Human written'),
